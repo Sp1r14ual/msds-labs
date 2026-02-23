@@ -84,40 +84,47 @@ def initY(theta, flag):
 
 def critIdent(theta, params):
     """Вычисление критерия идентификации (логарифмическая функция правдоподобия)"""
+    # Шаг 1
     y = params['y']
     F = Config.get_F(theta)
     psi = Config.get_Psi(theta)
     Pkk = Config.P0.copy()
 
+    # Шаг 2
     x = [[[np.zeros((Config.n, 1)) for _ in range(Config.ki[i])] for i in range(Config.q)] for _ in range(Config.N + 1)]
     hi = Config.N * Config.m * Config.v * math.log(2 * math.pi)
 
+    # Шаг 3
     for k in range(Config.N):
-        Pk1k = ABAt(F, Pkk) + ABAt(Config.G, Config.Q)
-        Bk1 = ABAt(Config.H, Pk1k) + Config.R
-        Kk1 = np.dot(np.dot(Pk1k, Config.H.transpose()), np.linalg.inv(Bk1))
-        Pk1k1 = np.dot((np.eye(Config.n) - np.dot(Kk1, Config.H)), Pk1k)
+        Pk1k = ABAt(F, Pkk) + ABAt(Config.G, Config.Q) # Формула 10
+        Bk1 = ABAt(Config.H, Pk1k) + Config.R # Формула 12
+        Kk1 = np.dot(np.dot(Pk1k, Config.H.transpose()), np.linalg.inv(Bk1)) # Формула 13
+        Pk1k1 = np.dot((np.eye(Config.n) - np.dot(Kk1, Config.H)), Pk1k) # Формула 15
         
+        # Шаг 4
         delta = 0
         for i in range(Config.q):
-            ui = np.expand_dims(Config.U[i][k], axis=0)
-            for j in range(Config.ki[i]):
-                if k == 0:
-                    x[k][i][j] = np.zeros((Config.n, 1))
+            ui = np.expand_dims(Config.U[i][k], axis=0) # Шаг 5
+            for j in range(Config.ki[i]): # Шаг 6
+                if k == 0: # Шаг 7
+                    x[k][i][j] = np.zeros((Config.n, 1)) 
 
-                xk1k = np.dot(F, x[k][i][j]) + np.dot(psi, ui)
-                epsk1 = y[k+1][i][j] - np.dot(Config.H, xk1k)
-                x[k+1][i][j] = xk1k + np.dot(Kk1, epsk1)
+                # Шаг 8
+                xk1k = np.dot(F, x[k][i][j]) + np.dot(psi, ui) # Формула 9
+                epsk1 = y[k+1][i][j] - np.dot(Config.H, xk1k) # Формула 11
+                x[k+1][i][j] = xk1k + np.dot(Kk1, epsk1) # Формула 14
 
+                # Шаг 9
                 delta += np.dot(np.dot(epsk1.transpose(), np.linalg.inv(Bk1)), epsk1)[0, 0]
 
-        hi += Config.v * math.log(np.linalg.det(Bk1)) + delta
+        hi += Config.v * math.log(np.linalg.det(Bk1)) + delta # крит идент., шаг 12
         Pkk = Pk1k1.copy()
 
-    return hi / 2.0
+    return hi / 2.0 # шаг 14
 
 def grad(theta, params):
     """Аналитическое вычисление градиента критерия идентификации"""
+    # Шаг 1-2
     y = params['y']
     F = Config.get_F(theta)
     psi = Config.get_Psi(theta)
@@ -131,11 +138,13 @@ def grad(theta, params):
     dhi = np.zeros(Config.s)
 
     for k in range(Config.N):
+        # Шаг 3
         Pk1k = ABAt(F, Pkk) + ABAt(Config.G, Config.Q)
         Bk1 = ABAt(Config.H, Pk1k) + Config.R
         Kk1 = np.dot(np.dot(Pk1k, Config.H.transpose()), np.linalg.inv(Bk1))
         Pk1k1 = np.dot((np.eye(Config.n) - np.dot(Kk1, Config.H)), Pk1k)
-
+        
+        # Шаг 4
         dBk1 = [np.zeros((Config.m, Config.m)) for _ in range(Config.s)]
         dKk1 = [np.zeros((Config.n, Config.m)) for _ in range(Config.s)]
         dPk1k1 = [np.zeros((Config.n, Config.n)) for _ in range(Config.s)]
@@ -158,28 +167,35 @@ def grad(theta, params):
             dPk1k1[th] = np.dot(np.eye(Config.n) - np.dot(Kk1, Config.H), dPk1k)
             dPk1k1[th] -= np.dot((np.dot(dKk1[th], Config.H) + np.dot(Kk1, Config.dH[th])), Pk1k)
 
+        # Шаг 5
         delta = np.zeros(Config.s)
 
         for i in range(Config.q):
-            ui = np.expand_dims(Config.U[i][k], axis=0)
+            ui = np.expand_dims(Config.U[i][k], axis=0) #Шаг 6
+            # Шаг 7
             for j in range(Config.ki[i]):
+                # Шаг 8
                 if k == 0:
                     for th in range(Config.s):
                         dx[k][i][j][th] = Config.dx0[th].copy()
                     x[k][i][j] = Config.x0.copy()
 
+                # Шаг 9
                 xk1k = np.dot(F, x[k][i][j]) + np.dot(psi, ui)
                 epsk1 = y[k+1][i][j] - np.dot(Config.H, xk1k)
                 x[k+1][i][j] = xk1k + np.dot(Kk1, epsk1)
 
                 for th in range(Config.s):
+                    # Шаг 10
                     dxk1k = np.dot(Config.dF[th], x[k][i][j]) + np.dot(F, dx[k][i][j][th]) + np.dot(Config.dPsi[th], ui)
                     depsk1 = -np.dot(Config.dH[th], xk1k) - np.dot(Config.H, dxk1k)
                     dx[k+1][i][j][th] = dxk1k + np.dot(dKk1[th], epsk1) + np.dot(Kk1, depsk1)
 
+                    # Шаг 11
                     delta[th] += (depsk1.T @ np.linalg.inv(Bk1) @ epsk1)[0, 0]
                     delta[th] -= (epsk1.T / 2 @ np.linalg.inv(Bk1) @ dBk1[th] @ np.linalg.inv(Bk1) @ epsk1)[0, 0]
 
+        # Шаг 14
         for th in range(Config.s):
             dhi[th] += (Config.v / 2.0) * np.trace(np.dot(np.linalg.inv(Bk1), dBk1[th])) + delta[th]
 
